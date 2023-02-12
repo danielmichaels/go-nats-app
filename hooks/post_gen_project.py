@@ -29,9 +29,6 @@ def print_final_instructions():
         $ cd {{ cookiecutter.project_name.strip() }} && git init
     - Run go mod tidy to pull in dependencies:
         $ go mod tidy
-    - Create node resources (Tailwind and Alpine.js)
-        $ yarn
-        $ make assets
     - Check the code works (if you have `air` in your $PATH)
         $ air
         or:

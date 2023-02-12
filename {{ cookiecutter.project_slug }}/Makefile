@@ -1,4 +1,4 @@
-PROJECT_NAME=netcollect
+PROJECT_NAME={{ cookiecutter.project_name.strip() }}
 include .env
 current_time = $(shell date --iso-8601=seconds)
 git_description = $(shell git describe --always --dirty --tags --long)
@@ -22,10 +22,10 @@ help : Makefile
 env:
 	env
 
-## run/app: Run the server
-.PHONY: run/app
-run/app:
-	@go run ./cmd/app/main.go
+## run/{{ cookiecutter.cmd_name.strip() }}: Run the server
+.PHONY: run/{{ cookiecutter.cmd_name.strip() }}
+run/{{ cookiecutter.cmd_name.strip() }}:
+	@go run ./cmd/{{ cookiecutter.cmd_name.strip() }}/main.go
 
 # ==================================================================================== #
 # DEVELOPMENT
