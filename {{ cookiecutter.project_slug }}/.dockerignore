@@ -1,0 +1,9 @@
+.env
+docker-compose.yml
+#.git
+.gitlab-ci.yml
+.gitignore
+README.md
+Makefile
+.air.toml
+tmp
