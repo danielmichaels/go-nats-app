@@ -15,21 +15,21 @@ type Application struct {
 }
 
 func (app *Application) InitSubscribers() error {
-	err := app.exampleSubscriber1()
+	err := app.exampleSubscriber()
 	if err != nil {
 		return err
 	}
-	err = app.exampleSubscriber2()
+	err = app.exampleQueueGroup()
 	if err != nil {
 		return err
 	}
 	return nil
 }
 
-func (app *Application) exampleSubscriber1() error {
-	subj := "example.event.1"
+func (app *Application) exampleSubscriber() error {
+	subj := "example.sub"
 	if _, err := app.Nats.Conn.Subscribe(subj, func(msg *nats.Msg) {
-		app.Logger.Debug().Msgf("example.event.1 msg.Data received: %-v", string(msg.Data))
+		app.Logger.Debug().Msgf("%q msg.Data received: %-v", subj, string(msg.Data))
 		time.Sleep(1 * time.Second)
 	}); err != nil {
 		app.Logger.Error().Err(err).Msgf("err subscribing to: %q", subj)
@@ -38,10 +38,11 @@ func (app *Application) exampleSubscriber1() error {
 	return nil
 }
 
-func (app *Application) exampleSubscriber2() error {
-	subj := "example.event.2"
-	if _, err := app.Nats.Conn.Subscribe(subj, func(msg *nats.Msg) {
-		app.Logger.Debug().Msgf("example.event.2 msg.Data received: %-v", string(msg.Data))
+func (app *Application) exampleQueueGroup() error {
+	subj := "example.queue"
+	queue := "examples"
+	if _, err := app.Nats.Conn.QueueSubscribe(subj, queue, func(msg *nats.Msg) {
+		app.Logger.Debug().Msgf("%q msg.Data received: %-v", subj, string(msg.Data))
 		time.Sleep(1 * time.Second)
 	}); err != nil {
 		app.Logger.Error().Err(err).Msgf("err subscribing to: %q", subj)
