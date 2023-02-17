@@ -23,8 +23,6 @@ tasks:
     silent: true
 
   dev:
-    deps:
-      - check
     desc: |
       Run the local development environment
     cmds:
@@ -37,8 +35,6 @@ tasks:
       - docker build . -f deploy/Dockerfile -t "{{.REGISTRY}}/{{.IMAGE}}"
 
   docker-push:
-    deps:
-      - docker-build
     desc: |
       Push the docker image
     cmds:
