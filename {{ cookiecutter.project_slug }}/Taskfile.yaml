@@ -29,7 +29,7 @@ tasks:
       Run the local development environment
     cmds:
       - air
-
+  {% raw %}
   docker-build:
     desc: |
       Build the docker image
@@ -43,7 +43,7 @@ tasks:
       Push the docker image
     cmds:
       - docker push "{{.REGISTRY}}/{{.IMAGE}}"
-
+  {% endraw %}
   nats:
     desc: |
       Run the local NATS box in detached mode
