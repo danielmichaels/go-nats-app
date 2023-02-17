@@ -32,9 +32,9 @@ def print_final_instructions():
     - Check the code works (if you have `air` in your $PATH)
         $ air
         or:
+        $ task dev
+        or (no hot-reloading):
         $ go run cmd/{{ cookiecutter.cmd_name.strip() }}/main.go
-        or:
-        $ make run/{{ cookiecutter.cmd_name.strip() }}
     - Upload initial code to git:
         $ git add -a
         $ git commit -m "Initial commit!"

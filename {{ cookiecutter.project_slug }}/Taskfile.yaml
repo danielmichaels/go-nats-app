@@ -1,0 +1,72 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  REGISTRY: {{ cookiecutter.docker_registry.strip() }}
+  IMAGE: {{ cookiecutter.project_name.strip() }}
+  TAG: latest
+
+tasks:
+  default:
+    desc: |
+      List all available tasks
+    cmds:
+      - task --list
+    silent: true
+
+  env:
+    desc: |
+      Print all environment variables sorted alphabetically
+    cmds:
+      - env | sort
+    silent: true
+
+  dev:
+    deps:
+      - check
+    desc: |
+      Run the local development environment
+    cmds:
+      - air
+
+  docker-build:
+    desc: |
+      Build the docker image
+    cmds:
+      - docker build . -f deploy/Dockerfile -t "{{.REGISTRY}}/{{.IMAGE}}"
+
+  docker-push:
+    deps:
+      - docker-build
+    desc: |
+      Push the docker image
+    cmds:
+      - docker push "{{.REGISTRY}}/{{.IMAGE}}"
+
+  nats:
+    desc: |
+      Run the local NATS box in detached mode
+    cmds:
+      - docker run --name nats --rm -d -p 4222:4222 -p 8222:8222 nats --http_port 8222
+
+  nats-box:
+    desc: |
+      Run the interactive natsio/nats-box
+    cmds:
+      - docker run --name nats-box --network host --rm -p 4222:4222 -p 8222:8222 -ti natsio/nats-box
+
+  test:
+    desc: |
+      Run go tests
+    cmds:
+      - CGO_ENABLED=1 go test -race -cover -vet=off ./...
+
+  audit:
+    desc: |
+      Run go auditing tools
+    cmds:
+      - go fmt ./...
+      - go vet ./...
+      - staticcheck ./...
+      - CGO_ENANLED=1 go test -race -vet=off ./...

@@ -3,6 +3,7 @@
   "project_name": "go-nats-app",
   "project_slug": "{{ '-'.join(cookiecutter['project_name'].lower().split()).replace('_', '-') }}",
   "cmd_name": "app",
+  "docker_registry": "docker.io/danielmichaels",
   "project_description": "A service based application using NATS for messaging",
   "go_module_path": "github.com/{{ cookiecutter.github_username.strip() }}/{{ cookiecutter.project_name.replace(' ', '-') }}",
   "go_version": [
