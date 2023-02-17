@@ -28,10 +28,13 @@ server is running.
 ```shell
 # open two terminals
 # in terminal one run:
-air 
+# starts nats container
+task nats
+# starts hot-reloading dev server
+task dev 
 
 # in terminal two run:
-docker run --rm -it synadia/nats-box 
+task nats-box
 # inside the container run
 nats pub example.sub 'All subscribers will see this'
 nats pub example.queue 'Only one subscriber per queue group would see this'
