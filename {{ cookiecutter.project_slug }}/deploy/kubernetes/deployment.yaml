@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ cookiecutter.project_name.strip() }}
+  namespace: services
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      run: {{ cookiecutter.project_name.strip() }}
+  template:
+    metadata:
+      labels:
+        run: {{ cookiecutter.project_name.strip() }}
+    spec:
+      initContainers:
+        - name: wait-for-nats
+          image: tianon/network-toolbox
+          envFrom:
+            - secretRef:
+                name: {{ cookiecutter.project_name.strip() }}
+          command:
+            - sh
+            - -c
+            - until curl -sS -o /dev/null nats:8222/varz; do echo waiting for nats; sleep 2; done
+      containers:
+        - name: {{ cookiecutter.project_name.strip() }}
+          image: {{ cookiecutter.docker_registry.strip() }}/{{ cookiecutter.project_name.strip() }}
+          envFrom:
+            - secretRef:
+                name: {{ cookiecutter.project_name.strip() }}
+
