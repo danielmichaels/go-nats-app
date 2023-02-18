@@ -7,3 +7,5 @@ README.md
 Makefile
 .air.toml
 tmp
+deploy
+Taskfile.yaml
