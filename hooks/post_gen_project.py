@@ -4,7 +4,13 @@ import textwrap
 from pathlib import Path
 
 CWD = Path.cwd().absolute()
+print(CWD)  # prints /absolute/path/to/{{cookiecutter.project_slug}}
 
+def remove(filepath):
+    if os.path.isfile(filepath):
+        os.remove(filepath)
+    elif os.path.isdir(filepath):
+        shutil.rmtree(filepath)
 def create_env():
     """
     Copy .env.sample to .env automatically after creating the project.
@@ -15,6 +21,9 @@ def create_env():
 
     shutil.copyfile(sample_envfile, envfile)
 
+def remove_mongo():
+    if "{{cookiecutter.mongo}}" == "n":
+        remove(Path(CWD)/"internal"/"db")
 def print_final_instructions():
     """
     Simply prints final instructions for users to follow once they generate a project
@@ -46,6 +55,7 @@ def print_final_instructions():
 
 runners = [
     create_env,
+    remove_mongo,
     print_final_instructions,
 ]
 

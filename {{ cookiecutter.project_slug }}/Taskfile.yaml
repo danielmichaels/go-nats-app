@@ -3,8 +3,9 @@
 version: '3'
 
 vars:
+  PROJECT: {{ cookiecutter.project_name.strip() }}
   REGISTRY: {{ cookiecutter.docker_registry.strip() }}
-  IMAGE: {{ cookiecutter.project_name.strip() }}
+  IMAGE: {% raw %}"{{.PROJECT}}"{% endraw %}
   TAG: latest
 
 tasks:
@@ -66,3 +67,15 @@ tasks:
       - go vet ./...
       - staticcheck ./...
       - CGO_ENANLED=1 go test -race -vet=off ./...
+
+  decrypt:
+    desc: |
+      Decrypt the secrets.yaml file
+    cmds:
+      - 'sops --decrypt --age $(cat "$HOME/.sops/dev-key.txt" | grep -oP "public key: \K(.*)") --encrypted-regex "^(data|stringData)$" --in-place "deploy/kubernetes/secret.yaml"'
+
+  encrypt:
+    desc: |
+      Encrypt the secrets.yaml file
+    cmds:
+      - 'sops --encrypt --age $(cat "$HOME/.sops/dev-key.txt" | grep -oP "public key: \K(.*)") --encrypted-regex "^(data|stringData)$" --in-place "deploy/kubernetes/secret.yaml"'

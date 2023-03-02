@@ -5,13 +5,18 @@ import (
 	"{{ cookiecutter.go_module_path.strip() }}/internal/config"
 	"github.com/rs/zerolog"
 	"time"
-
+	{% if cookiecutter.mongo == "y" %}
+	"go.mongodb.org/mongo-driver/mongo"
+	{% endif %}
 )
 
 type Application struct {
 	Nats   *Nats
 	Config *config.Conf
 	Logger zerolog.Logger
+	{% if cookiecutter.mongo == "y" %}
+	Database *mongo.Database
+	{% endif %}
 }
 
 func (app *Application) InitSubscribers() error {
