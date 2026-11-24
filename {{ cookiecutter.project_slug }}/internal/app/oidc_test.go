@@ -167,6 +167,22 @@ func TestOIDCCallbackValidation(t *testing.T) {
 			t.Fatalf("err = %v", err)
 		}
 	})
+	t.Run("unlinked identity ends its sessions", func(t *testing.T) {
+		erin := linkedUser(t, a, "erin", p.Issuer(), "subject-4")
+		p.Set(func(p *oidctest.Provider) { p.Subject = "subject-4" })
+		defer p.Set(func(p *oidctest.Provider) { p.Subject = "subject-1" })
+		at := startLogin(t, a)
+		tok, _, _, err := a.Auth.OIDCCallback(ctx, at.state, at.state, p.Code(at.nonce, at.challenge, at.redirect))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err := a.Auth.Users.Unlink(ctx, erin.ID, users.Identity{Issuer: p.Issuer(), Subject: "subject-4"}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := a.Auth.Session(ctx, tok); !errors.Is(err, authn.ErrUnauthenticated) {
+			t.Fatalf("session of an unlinked identity: %v", err)
+		}
+	})
 	t.Run("callback finishes on another replica", func(t *testing.T) {
 		b := replica(t, a, p)
 		at := startLogin(t, a)

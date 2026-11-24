@@ -17,10 +17,13 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
+	"slices"
 	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go/jetstream"
+
+	"{{ cookiecutter.go_module_path }}/internal/users"
 )
 
 const (
@@ -58,6 +61,16 @@ type Record struct {
 // InboxPrefix is the only inbox namespace the session's NATS users may
 // subscribe to.
 func (r Record) InboxPrefix() string { return "_INBOX_" + r.SessionID }
+
+// Admits reports whether u still grants this session: the user is enabled,
+// was not disabled after the session started, and still has the session's
+// OIDC identity linked.
+func (r Record) Admits(u users.User) bool {
+	if u.ID != r.UserID || u.Disabled || !r.AuthTime.After(u.SessionsAfter) {
+		return false
+	}
+	return r.OIDC == nil || slices.Contains(u.Identities, users.Identity{Issuer: r.OIDC.Issuer, Subject: r.OIDC.Subject})
+}
 
 // ValidUntil is the last instant that this session may grant NATS access.
 func (r Record) ValidUntil() time.Time {

@@ -232,6 +232,15 @@ func TestAdmissionAndIsolation(t *testing.T) {
 		if _, _, _, err := a.Auth.ConnectToken(ctx, dave.cur.Ref); !errors.Is(err, authn.ErrUnauthenticated) {
 			t.Fatalf("disabled user got a connect token: %v", err)
 		}
+		erin := login(t, a, "erin")
+		for _, off := range []bool{true, false} {
+			if _, err := a.Auth.Users.SetDisabled(ctx, erin.cur.User.ID, off); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if _, _, _, err := a.Auth.ConnectToken(ctx, erin.cur.Ref); !errors.Is(err, authn.ErrUnauthenticated) {
+			t.Fatalf("re-enabled user's old session got a connect token: %v", err)
+		}
 	})
 }
 

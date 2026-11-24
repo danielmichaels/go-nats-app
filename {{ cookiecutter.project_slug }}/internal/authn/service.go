@@ -171,7 +171,7 @@ func (s *Service) SessionByRef(ctx context.Context, ref string) (Current, error)
 		return Current{}, ErrUnauthenticated
 	}
 	u, err := s.Users.Get(ctx, rec.UserID)
-	if errors.Is(err, users.ErrNotFound) || (err == nil && u.Disabled) {
+	if errors.Is(err, users.ErrNotFound) || (err == nil && !rec.Admits(u)) {
 		s.end(ctx, ref, "user")
 		return Current{}, ErrUnauthenticated
 	}

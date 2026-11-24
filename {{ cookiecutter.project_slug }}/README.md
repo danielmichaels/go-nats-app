@@ -80,8 +80,10 @@ subjects to `callout.Permissions`.
 
 Logout deletes the session and tells that session's clients to close. A client
 that ignores this keeps its connection until its user JWT expires, at most
-`USER_JWT_TTL`. Disabling a user works the same way. The app does not
-disconnect connections on the server side.
+`USER_JWT_TTL`. Disabling a user and unlinking an OIDC identity work the
+same way. Disabling ends the user's sessions for good: they stay ended after
+the user is enabled again. The app does not disconnect connections on the
+server side.
 
 ## OIDC sign-in
 

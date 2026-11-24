@@ -52,6 +52,9 @@ type User struct {
 	Created    time.Time  `json:"created"`
 	Identities []Identity `json:"identities,omitempty"`
 	Hash       string     `json:"hash,omitempty"`
+	// SessionsAfter is when the user was last disabled. Sessions that
+	// started earlier stay ended after the user is enabled again.
+	SessionsAfter time.Time `json:"sessions_after,omitzero"`
 }
 
 // Public is the user record without its password hash.
@@ -226,7 +229,13 @@ func isConflict(err error) bool {
 }
 
 func (s *Store) SetDisabled(ctx context.Context, id string, disabled bool) (User, error) {
-	return s.update(ctx, id, func(u *User) error { u.Disabled = disabled; return nil })
+	return s.update(ctx, id, func(u *User) error {
+		u.Disabled = disabled
+		if disabled {
+			u.SessionsAfter = time.Now()
+		}
+		return nil
+	})
 }
 
 func (s *Store) SetRole(ctx context.Context, id, role string) (User, error) {

@@ -130,8 +130,8 @@ func (a *App) start(ctx context.Context) error {
 	if err != nil {
 		return err
 	}
-	acct := &account.Service{ID: id, Disabled: func(userID string) {
-		b, _ := json.Marshal(map[string]string{"type": "disabled"})
+	acct := &account.Service{ID: id, Revoked: func(userID string) {
+		b, _ := json.Marshal(map[string]string{"type": "revoked"})
 		_ = publish(authn.AccountEventSubject(userID), b)
 	}}
 	if err := acct.Register(a.micro); err != nil {

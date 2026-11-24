@@ -49,8 +49,9 @@ type UpdateRequest struct {
 
 type Service struct {
 	ID api.Identity
-	// Disabled is called after a user is disabled, so their clients close.
-	Disabled func(userID string)
+	// Revoked is called after a change that can end the user's sessions, so
+	// their clients check them again.
+	Revoked func(userID string)
 }
 
 func (s *Service) Register(svc micro.Service) error {
@@ -139,13 +140,16 @@ func (s *Service) update(ctx context.Context, c api.Caller, data []byte) (any, e
 		if u, err = s.ID.Users.Unlink(ctx, in.ID, *in.Unlink); err != nil {
 			return nil, api.Errorf(api.CodeBadRequest, "%s", err.Error())
 		}
+		if s.Revoked != nil {
+			s.Revoked(in.ID)
+		}
 	}
 	if in.Disabled != nil {
 		if u, err = s.ID.Users.SetDisabled(ctx, in.ID, *in.Disabled); err != nil {
 			return nil, api.Errorf(api.CodeInternal, "could not update the user")
 		}
-		if *in.Disabled && s.Disabled != nil {
-			s.Disabled(in.ID)
+		if *in.Disabled && s.Revoked != nil {
+			s.Revoked(in.ID)
 		}
 	}
 	return u.Public(), nil

@@ -137,7 +137,7 @@ func (is *Issuer) authorize(req *jwt.AuthorizationRequestClaims) (string, error)
 		return "", errDenied
 	}
 	u, err := is.Users.Get(ctx, rec.UserID)
-	if err != nil || u.Disabled {
+	if err != nil || !rec.Admits(u) {
 		return "", errDenied
 	}
 	uc := jwt.NewUserClaims(req.UserNkey)
