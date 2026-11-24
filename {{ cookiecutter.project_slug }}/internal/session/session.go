@@ -32,7 +32,6 @@ const (
 
 var (
 	ErrNotFound     = errors.New("session not found")
-	ErrEnded        = errors.New("session ended")
 	ErrConflict     = errors.New("session changed")
 	ErrInvalidToken = errors.New("connect token is not valid")
 )

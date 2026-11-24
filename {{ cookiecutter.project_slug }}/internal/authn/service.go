@@ -59,7 +59,7 @@ type Service struct {
 func New(ctx context.Context, js jetstream.JetStream, replicas int, u *users.Store, s *session.Store, p *oidcauth.Provider, pub Publisher, o Options) (*Service, error) {
 	kv, err := js.CreateOrUpdateKeyValue(ctx, jetstream.KeyValueConfig{
 		Bucket: AttemptsBucket, Description: "OIDC login attempts", History: 1,
-		Storage: jetstream.FileStorage, TTL: 10 * time.Minute, Replicas: replicas,
+		Storage: jetstream.FileStorage, TTL: 10 * time.Minute, MaxBytes: 16 << 20, Replicas: replicas,
 	})
 	if err != nil {
 		return nil, err
@@ -85,7 +85,7 @@ func AccountEventSubject(userID string) string { return "app.events." + userID +
 
 func (s *Service) Login(ctx context.Context, username, password, remote string) (string, Current, error) {
 	key := "u:" + username
-	if !s.limit.allow(key) || !s.limit.allow("ip:"+remote) {
+	if !s.limit.allow(key, userLimit) || !s.limit.allow("ip:"+remote, ipLimit) {
 		return "", Current{}, ErrThrottled
 	}
 	u, err := s.Users.CheckPassword(ctx, username, password)
@@ -102,7 +102,7 @@ func (s *Service) Login(ctx context.Context, username, password, remote string) 
 }
 
 func (s *Service) Setup(ctx context.Context, token, username, password, remote string) (string, Current, error) {
-	if !s.limit.allow("setup") || !s.limit.allow("ip:"+remote) {
+	if !s.limit.allow("setup", userLimit) || !s.limit.allow("ip:"+remote, ipLimit) {
 		return "", Current{}, ErrThrottled
 	}
 	u, err := s.Users.Setup(ctx, token, username, password)
@@ -138,11 +138,11 @@ func (s *Service) Logout(ctx context.Context, token string) {
 }
 
 func (s *Service) end(ctx context.Context, ref, reason string) {
-	rec, _, err := s.Sessions.Get(ctx, ref)
+	rec, _, getErr := s.Sessions.Get(ctx, ref)
 	if err := s.Sessions.Delete(ctx, ref); err != nil {
 		slog.Warn("delete session", "error", err)
 	}
-	if err == nil && s.publish != nil {
+	if getErr == nil && s.publish != nil {
 		b, _ := json.Marshal(map[string]string{"type": "ended", "reason": reason})
 		_ = s.publish(SessionEventSubject(rec.UserID, rec.SessionID), b)
 	}
@@ -317,10 +317,14 @@ func attemptKey(state string) string {
 
 // OIDCStart stores a login attempt and returns the provider URL and the
 // state, which the caller binds to the browser in a cookie.
-func (s *Service) OIDCStart(ctx context.Context, redirect string) (string, string, error) {
+func (s *Service) OIDCStart(ctx context.Context, redirect, remote string) (string, string, error) {
 	if s.OIDC == nil {
 		return "", "", ErrOIDCDisabled
 	}
+	if !s.limit.allow("oidc:"+remote, oidcLimit) {
+		return "", "", ErrThrottled
+	}
+	s.limit.fail("oidc:" + remote)
 	state := randomHex(32)
 	a := attempt{Nonce: randomHex(32), Verifier: oauth2.GenerateVerifier(), Redirect: LocalRedirect(redirect), Expires: s.now().Add(5 * time.Minute)}
 	b, _ := json.Marshal(a)

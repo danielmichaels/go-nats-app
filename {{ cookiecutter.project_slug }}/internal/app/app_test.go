@@ -267,7 +267,7 @@ func TestUserJWTExpiryReconnects(t *testing.T) {
 	s := login(t, a, "alice")
 	ended := make(chan struct{}, 1)
 	reconnected := make(chan struct{}, 4)
-	nc, _, err := a.DialSession(s.cur.Ref, func() { ended <- struct{}{} },
+	nc, err := a.DialSession(s.cur.Ref, func() { ended <- struct{}{} },
 		nats.ReconnectHandler(func(*nats.Conn) { reconnected <- struct{}{} }))
 	if err != nil {
 		t.Fatal(err)

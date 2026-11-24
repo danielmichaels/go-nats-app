@@ -162,7 +162,7 @@ func (a *App) start(ctx context.Context) error {
 		return err
 	}
 
-	a.HTTP = &authn.Handler{Auth: a.Auth, SecureCookie: cfg.CookieSecure,
+	a.HTTP = &authn.Handler{Auth: a.Auth, SecureCookie: cfg.CookieSecure, TrustedProxies: cfg.TrustedProxies,
 		NATS: authn.NATSConfig{Servers: []string{browserURL}, Sentinel: a.Runtime.Sentinel}}
 
 	if tok, err := us.EnsureSetupToken(ctx); err != nil {

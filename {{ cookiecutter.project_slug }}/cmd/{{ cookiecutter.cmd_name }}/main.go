@@ -72,7 +72,9 @@ func run() error {
 	a.HTTP.Routes(mux, csrf)
 	frontend.Routes(mux, csrf)
 
-	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: securityHeaders(mux), ReadHeaderTimeout: 10 * time.Second}
+	// No WriteTimeout: SSE responses stay open.
+	srv := &http.Server{Addr: cfg.HTTPAddr, Handler: securityHeaders(mux),
+		ReadHeaderTimeout: 10 * time.Second, ReadTimeout: 30 * time.Second, IdleTimeout: 2 * time.Minute}
 	errc := make(chan error, 1)
 	go func() {
 		slog.Info("http listening", "addr", cfg.HTTPAddr, "public_url", cfg.PublicURL)

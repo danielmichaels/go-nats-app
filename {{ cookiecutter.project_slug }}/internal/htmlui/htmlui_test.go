@@ -98,6 +98,20 @@ func TestSessionConnection(t *testing.T) {
 		t.Fatalf("open connections = %d", ui.open())
 	}
 
+	aliceCur, _ := a.Auth.Session(ctx, alice)
+	bobCur, _ := a.Auth.Session(ctx, bob)
+	ui.mu.Lock()
+	bobNC := ui.conns[bobCur.Ref].nc
+	ui.mu.Unlock()
+	forged := "app.events." + aliceCur.User.ID + ".session." + aliceCur.Record.SessionID
+	if err := bobNC.PublishRequest("app.api.whoami", forged, nil); err != nil {
+		t.Fatal(err)
+	}
+	time.Sleep(500 * time.Millisecond)
+	if ui.open() != 2 {
+		t.Fatal("a reply forged onto alice's session subject dropped her connection")
+	}
+
 	if w := do(h, "POST", "/logout", alice, url.Values{}); !strings.Contains(w.Body.String(), "/login") {
 		t.Fatalf("logout: %s", w.Body)
 	}

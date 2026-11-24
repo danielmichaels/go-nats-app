@@ -4,6 +4,7 @@ package config
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"net/url"
 	"os"
 	"strconv"
@@ -37,7 +38,11 @@ type Config struct {
 	NATSBrowserURL string
 	Replicas       int
 
-	CookieSecure  bool
+	CookieSecure bool
+	// TrustedProxies are reverse proxies whose X-Forwarded-For is used for
+	// login throttling.
+	TrustedProxies []netip.Prefix
+
 	SessionTTL    time.Duration
 	ConnectTTL    time.Duration
 	UserJWTTTL    time.Duration
@@ -45,8 +50,6 @@ type Config struct {
 
 	OIDC *OIDC
 }
-
-func (c Config) Production() bool { return c.Env == "production" }
 
 func Load() (Config, error) {
 	var errs []error
@@ -70,6 +73,17 @@ func Load() (Config, error) {
 		ConnectTTL:      duration("CONNECT_TOKEN_TTL", time.Minute, &errs),
 		UserJWTTTL:      duration("USER_JWT_TTL", 15*time.Minute, &errs),
 		RefreshMargin:   duration("OIDC_REFRESH_MARGIN", 2*time.Minute, &errs),
+	}
+	for _, v := range strings.Split(os.Getenv("TRUSTED_PROXIES"), ",") {
+		if v = strings.TrimSpace(v); v == "" {
+			continue
+		}
+		p, err := netip.ParsePrefix(v)
+		if err != nil {
+			errs = append(errs, fmt.Errorf("TRUSTED_PROXIES: %w", err))
+			continue
+		}
+		c.TrustedProxies = append(c.TrustedProxies, p)
 	}
 	if iss := os.Getenv("OIDC_ISSUER"); iss != "" {
 		c.OIDC = &OIDC{

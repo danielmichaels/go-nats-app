@@ -87,11 +87,36 @@ func (u *UI) Close() {
 func (u *UI) drop(ref string) {
 	u.mu.Lock()
 	c := u.conns[ref]
-	delete(u.conns, ref)
 	u.mu.Unlock()
 	if c != nil {
-		c.once.Do(func() { close(c.done) })
-		c.nc.Close()
+		u.end(ref, c)
+	}
+}
+
+// end closes c and removes it from the cache if it is still the session's
+// connection there, so a late handler of an old connection cannot drop a new
+// one.
+func (u *UI) end(ref string, c *userConn) {
+	u.mu.Lock()
+	if u.conns[ref] == c {
+		delete(u.conns, ref)
+	}
+	nc := c.nc
+	u.mu.Unlock()
+	c.once.Do(func() { close(c.done) })
+	if nc != nil {
+		nc.Close()
+	}
+}
+
+// recheck ends the connection when the session is gone. Session and account
+// events only trigger it: any user can publish a service reply onto another
+// user's event subject, so an event alone proves nothing.
+func (u *UI) recheck(ref string, c *userConn) {
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
+	if _, err := u.a.Auth.SessionByRef(ctx, ref); errors.Is(err, authn.ErrUnauthenticated) {
+		u.end(ref, c)
 	}
 }
 
@@ -106,18 +131,21 @@ func (u *UI) conn(cur authn.Current) (*userConn, error) {
 	}
 	v, err, _ := u.opening.Do(cur.Ref, func() (any, error) {
 		ref := cur.Ref
-		nc, _, err := u.a.DialSession(ref, func() { go u.drop(ref) },
-			nats.ClosedHandler(func(*nats.Conn) { go u.drop(ref) }))
+		c := &userConn{done: make(chan struct{})}
+		nc, err := u.a.DialSession(ref, func() { go u.end(ref, c) },
+			nats.ClosedHandler(func(*nats.Conn) { go u.end(ref, c) }))
 		if err != nil {
 			return nil, err
 		}
-		c := &userConn{nc: nc, done: make(chan struct{})}
-		end := func(*nats.Msg) { go u.drop(ref) }
+		u.mu.Lock()
+		c.nc = nc
+		u.mu.Unlock()
+		check := func(*nats.Msg) { go u.recheck(ref, c) }
 		for _, subj := range []string{
 			authn.SessionEventSubject(cur.User.ID, cur.Record.SessionID),
 			authn.AccountEventSubject(cur.User.ID),
 		} {
-			if _, err := nc.Subscribe(subj, end); err != nil {
+			if _, err := nc.Subscribe(subj, check); err != nil {
 				nc.Close()
 				return nil, err
 			}
@@ -135,7 +163,7 @@ func (u *UI) conn(cur authn.Current) (*userConn, error) {
 
 func isDatastar(r *http.Request) bool { return r.Header.Get("Datastar-Request") == "true" }
 
-// go sends the browser to path, by redirect or by SSE for a Datastar request.
+// goTo sends the browser to path, by redirect or by SSE for a Datastar request.
 func goTo(w http.ResponseWriter, r *http.Request, path string) {
 	if isDatastar(r) {
 		_ = datastar.NewSSE(w, r).Redirect(path)
@@ -242,12 +270,12 @@ func (u *UI) setupPage(w http.ResponseWriter, r *http.Request) {
 }
 
 func (u *UI) login(w http.ResponseWriter, r *http.Request) {
-	token, cur, err := u.a.Auth.Login(r.Context(), r.FormValue("username"), r.FormValue("password"), authn.Remote(r))
+	token, cur, err := u.a.Auth.Login(r.Context(), r.FormValue("username"), r.FormValue("password"), u.a.HTTP.Remote(r))
 	u.finishLogin(w, r, token, cur, err)
 }
 
 func (u *UI) setup(w http.ResponseWriter, r *http.Request) {
-	token, cur, err := u.a.Auth.Setup(r.Context(), r.FormValue("token"), r.FormValue("username"), r.FormValue("password"), authn.Remote(r))
+	token, cur, err := u.a.Auth.Setup(r.Context(), r.FormValue("token"), r.FormValue("username"), r.FormValue("password"), u.a.HTTP.Remote(r))
 	if err != nil && !errors.Is(err, users.ErrSetup) && !errors.Is(err, authn.ErrThrottled) && !errors.Is(err, authn.ErrUnavailable) {
 		patch(datastar.NewSSE(w, r), loginError(err.Error()))
 		return

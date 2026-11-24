@@ -13,7 +13,6 @@ import (
 )
 
 type Options struct {
-	Host           string
 	Port           int
 	WebsocketPort  int
 	AllowedOrigins []string
@@ -40,12 +39,9 @@ func Start(keys natsauth.Keys, o Options) (*Server, error) {
 			return nil, err
 		}
 	}
-	if o.Host == "" {
-		o.Host = "127.0.0.1"
-	}
 	opts := &server.Options{
 		ServerName:       "app-dev",
-		Host:             o.Host,
+		Host:             "127.0.0.1",
 		Port:             o.Port,
 		NoSigs:           true,
 		NoLog:            true,
@@ -57,7 +53,7 @@ func Start(keys natsauth.Keys, o Options) (*Server, error) {
 	}
 	if o.WebsocketPort != 0 {
 		opts.Websocket = server.WebsocketOpts{
-			Host:           o.Host,
+			Host:           "127.0.0.1",
 			Port:           o.WebsocketPort,
 			NoTLS:          true,
 			AllowedOrigins: o.AllowedOrigins,

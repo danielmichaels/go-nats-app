@@ -143,6 +143,11 @@ Production (`APP_ENV=production`) refuses to start the embedded NATS server
 and requires `COOKIE_SECURE=true`. With secure cookies the session cookie is
 `__Host-session`: Secure, HttpOnly, SameSite=Lax, path `/`.
 
+Login throttling counts failures per client IP. Behind a reverse proxy every
+request comes from the proxy, so set `TRUSTED_PROXIES` to the proxy CIDRs, for
+example `10.0.0.0/8`. The app then reads `X-Forwarded-For` from the right and
+skips trusted hops. Without it the app ignores `X-Forwarded-For`.
+
 ### External NATS
 
 `task nats-setup` writes three files to `nats-setup/` and changes no server:

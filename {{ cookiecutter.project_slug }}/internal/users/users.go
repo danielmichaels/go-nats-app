@@ -34,7 +34,6 @@ var (
 	ErrExists   = errors.New("username is already in use")
 	ErrLinked   = errors.New("identity is already linked to a user")
 	ErrSetup    = errors.New("setup token is not valid, or setup is done")
-	ErrInvalid  = errors.New("invalid user")
 	nameRe      = regexp.MustCompile(`^[a-z0-9_-]{1,32}$`)
 )
 

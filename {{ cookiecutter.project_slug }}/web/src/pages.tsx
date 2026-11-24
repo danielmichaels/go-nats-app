@@ -3,11 +3,10 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link, useNavigate, useSearch } from '@tanstack/react-router'
 import { useEffect, useState } from 'react'
 import { keys, useConn, useConnState, useSession } from './lib/app'
-import { http, leave } from './lib/http'
+import { http, leave, type User } from './lib/http'
 import { request, UncertainError } from './lib/nats'
 
 type Note = { id: string; title: string; body: string; created: string }
-type AdminUser = { id: string; username: string; role: string; disabled: boolean; identities?: { issuer: string; subject: string }[] }
 
 const loginErrors: Record<string, string> = {
   refused: 'The identity provider login failed.',
@@ -21,9 +20,6 @@ const loginErrors: Record<string, string> = {
 function errorText(e: unknown) {
   return e instanceof Error ? e.message : 'Request failed.'
 }
-
-// Sign-in and sign-out reload the page, so no state of the old user stays.
-const reloadTo = leave
 
 export function Layout({ children }: { children: React.ReactNode }) {
   const session = useSession()
@@ -44,7 +40,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
               type="button"
               onClick={async () => {
                 await http.logout().catch(() => {})
-                reloadTo('/login')
+                leave('/login')
               }}
             >
               Sign out
@@ -70,7 +66,7 @@ export function LoginPage() {
     onSubmit: async ({ value }) => {
       try {
         await http.login(value.username, value.password)
-        reloadTo('/')
+        leave('/')
       } catch (e) {
         setError(errorText(e))
       }
@@ -141,7 +137,7 @@ export function SetupPage() {
     onSubmit: async ({ value }) => {
       try {
         await http.setup(value.token, value.username, value.password)
-        reloadTo('/')
+        leave('/')
       } catch (e) {
         setError(errorText(e))
       }
@@ -285,7 +281,7 @@ export function AdminPage() {
   const qc = useQueryClient()
   const users = useQuery({
     queryKey: keys.users(user.id),
-    queryFn: async () => (await request<{ users: AdminUser[] }>(nc, 'app.api.admin.users.list')).users,
+    queryFn: async () => (await request<{ users: User[] }>(nc, 'app.api.admin.users.list')).users,
   })
   const refresh = () => qc.invalidateQueries({ queryKey: keys.users(user.id) })
   const update = useMutation({

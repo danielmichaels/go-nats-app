@@ -16,12 +16,12 @@ import (
 // gets a new connect token, so a reconnect after the user JWT expires works
 // while the session is valid and fails once it ends. ended is called once
 // when the server refuses the session.
-func (a *App) DialSession(ref string, ended func(), opts ...nats.Option) (*nats.Conn, authn.Current, error) {
+func (a *App) DialSession(ref string, ended func(), opts ...nats.Option) (*nats.Conn, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	_, cur, _, err := a.Auth.ConnectToken(ctx, ref)
 	cancel()
 	if err != nil {
-		return nil, authn.Current{}, err
+		return nil, err
 	}
 	token := func() string {
 		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
@@ -52,11 +52,7 @@ func (a *App) DialSession(ref string, ended func(), opts ...nats.Option) (*nats.
 			}
 		}))
 	}
-	nc, err := nats.Connect(a.NATSURL, append(base, opts...)...)
-	if err != nil {
-		return nil, authn.Current{}, err
-	}
-	return nc, cur, nil
+	return nats.Connect(a.NATSURL, append(base, opts...)...)
 }
 
 func AuthError(err error) bool {

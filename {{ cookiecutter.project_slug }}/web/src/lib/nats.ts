@@ -11,7 +11,6 @@ export type EndReason = 'expired' | 'identity-changed'
 export type AppConnection = {
   nc: NatsConnection
   user: ConnectToken['user']
-  sessionId: string
   // ended resolves when the session can no longer be admitted.
   ended: Promise<EndReason>
   close: () => Promise<void>
@@ -91,15 +90,13 @@ export async function connectApp(): Promise<AppConnection> {
   window.addEventListener('online', wake)
 
   // The server publishes here when the session ends, such as a logout in
-  // another browser or a disabled user.
+  // another browser or a disabled user. Any user can publish a service reply
+  // onto these subjects, so a message only makes the tab ask the server.
   const prefix = `app.events.${first.user.id}`
   const ends = [nc.subscribe(`${prefix}.session.${first.session_id}`), nc.subscribe(`${prefix}.account`)]
   for (const sub of ends) {
     void (async () => {
-      for await (const _ of sub) {
-        end('expired')
-        break
-      }
+      for await (const _ of sub) void renew()
     })()
   }
 
@@ -121,7 +118,7 @@ export async function connectApp(): Promise<AppConnection> {
     if (!over) void renew()
   })
 
-  return { nc, user: first.user, sessionId: first.session_id, ended, close }
+  return { nc, user: first.user, ended, close }
 }
 
 export class ApiError extends Error {

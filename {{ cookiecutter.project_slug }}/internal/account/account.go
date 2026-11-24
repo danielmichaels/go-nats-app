@@ -64,17 +64,16 @@ func (s *Service) Register(svc micro.Service) error {
 		{"users-create", SubjectCreate, s.create, true},
 		{"users-update", SubjectUpdate, s.update, true},
 	} {
-		h, admin := ep.h, ep.admin
 		err := svc.AddEndpoint(ep.name, micro.HandlerFunc(func(req micro.Request) {
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
 			c, err := s.ID.Caller(ctx, req)
-			if err == nil && admin && c.User.Role != users.RoleAdmin {
+			if err == nil && ep.admin && c.User.Role != users.RoleAdmin {
 				err = api.Errorf(api.CodeForbidden, "admin role required")
 			}
 			var out any
 			if err == nil {
-				out, err = h(ctx, c, req.Data())
+				out, err = ep.h(ctx, c, req.Data())
 			}
 			api.Respond(req, out, err)
 		}), micro.WithEndpointSubject(ep.subject))

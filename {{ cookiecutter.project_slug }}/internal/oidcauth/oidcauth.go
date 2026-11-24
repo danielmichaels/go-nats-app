@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"slices"
 	"time"
 
 	"github.com/coreos/go-oidc/v3/oidc"
@@ -35,14 +36,12 @@ type Config struct {
 	RedirectURL  string
 	Scopes       []string
 	// AllowHTTP permits a plain HTTP issuer. Only development and tests set it.
-	AllowHTTP  bool
-	HTTPClient *http.Client
+	AllowHTTP bool
 }
 
 type Identity struct {
 	Issuer  string
 	Subject string
-	Name    string
 	Expiry  time.Time
 	Nonce   string
 }
@@ -64,10 +63,7 @@ func New(ctx context.Context, cfg Config) (*Provider, error) {
 	if len(cfg.Scopes) == 0 {
 		cfg.Scopes = []string{oidc.ScopeOpenID, "profile", oidc.ScopeOfflineAccess}
 	}
-	client := cfg.HTTPClient
-	if client == nil {
-		client = &http.Client{Timeout: 10 * time.Second}
-	}
+	client := &http.Client{Timeout: 10 * time.Second}
 	p, err := oidc.NewProvider(oidc.ClientContext(ctx, client), cfg.Issuer)
 	if err != nil {
 		return nil, fmt.Errorf("OIDC discovery: %w", err)
@@ -83,7 +79,7 @@ func New(ctx context.Context, cfg Config) (*Provider, error) {
 	if !allowedURL(ep.AuthURL, cfg.AllowHTTP) || !allowedURL(ep.TokenURL, cfg.AllowHTTP) || !allowedURL(meta.JWKS, cfg.AllowHTTP) {
 		return nil, errors.New("OIDC endpoints must use HTTPS")
 	}
-	if len(meta.Grants) > 0 && !contains(meta.Grants, "refresh_token") {
+	if len(meta.Grants) > 0 && !slices.Contains(meta.Grants, "refresh_token") {
 		return nil, errors.New("OIDC provider does not offer the refresh_token grant, which sessions need")
 	}
 	return &Provider{
@@ -97,15 +93,6 @@ func New(ctx context.Context, cfg Config) (*Provider, error) {
 	}, nil
 }
 
-func contains(xs []string, x string) bool {
-	for _, v := range xs {
-		if v == x {
-			return true
-		}
-	}
-	return false
-}
-
 func allowedURL(raw string, allowHTTP bool) bool {
 	u, err := url.Parse(raw)
 	if err != nil || u.Host == "" || u.User != nil || u.Fragment != "" {
@@ -113,8 +100,6 @@ func allowedURL(raw string, allowHTTP bool) bool {
 	}
 	return u.Scheme == "https" || (allowHTTP && u.Scheme == "http")
 }
-
-func (p *Provider) Issuer() string { return p.cfg.Issuer }
 
 func (p *Provider) ctx(ctx context.Context) context.Context { return oidc.ClientContext(ctx, p.client) }
 
@@ -156,9 +141,7 @@ func (p *Provider) verify(ctx context.Context, t *oauth2.Token) (Identity, error
 		return Identity{}, errors.New("ID token issuer or subject is not valid")
 	}
 	var claims struct {
-		Name     string `json:"name"`
-		Username string `json:"preferred_username"`
-		AZP      string `json:"azp"`
+		AZP string `json:"azp"`
 	}
 	if err := idt.Claims(&claims); err != nil {
 		return Identity{}, err
@@ -166,11 +149,7 @@ func (p *Provider) verify(ctx context.Context, t *oauth2.Token) (Identity, error
 	if (len(idt.Audience) > 1 || claims.AZP != "") && claims.AZP != p.cfg.ClientID {
 		return Identity{}, errors.New("ID token authorized party is not this client")
 	}
-	name := claims.Username
-	if name == "" {
-		name = claims.Name
-	}
-	return Identity{Issuer: idt.Issuer, Subject: idt.Subject, Name: name, Expiry: idt.Expiry, Nonce: idt.Nonce}, nil
+	return Identity{Issuer: idt.Issuer, Subject: idt.Subject, Expiry: idt.Expiry, Nonce: idt.Nonce}, nil
 }
 
 // Refresh uses the refresh token once. It returns the verified new identity

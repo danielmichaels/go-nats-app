@@ -157,11 +157,7 @@ func (rt Runtime) XKeyPair() (nkeys.KeyPair, error) {
 }
 
 func pub(seed string) string {
-	kp, err := nkeys.FromSeed([]byte(seed))
-	if err != nil {
-		panic(fmt.Sprintf("invalid seed: %v", err))
-	}
-	p, _ := kp.PublicKey()
+	p, _ := kp(seed).PublicKey()
 	return p
 }
 

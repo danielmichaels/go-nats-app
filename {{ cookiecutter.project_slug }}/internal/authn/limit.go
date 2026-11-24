@@ -6,12 +6,14 @@ import (
 )
 
 const (
-	maxFailures = 5
-	failWindow  = 5 * time.Minute
+	userLimit  = 5
+	ipLimit    = 20
+	oidcLimit  = 30
+	failWindow = 5 * time.Minute
 )
 
-// limiter counts failed logins per key in memory. Each replica counts on its
-// own, so the real limit is per replica.
+// limiter counts events per key in memory: failed logins, or OIDC starts.
+// Each replica counts on its own, so the real limit is per replica.
 type limiter struct {
 	mu        sync.Mutex
 	failures  map[string][]time.Time
@@ -35,13 +37,9 @@ func (l *limiter) recent(key string, now time.Time) []time.Time {
 	return keep
 }
 
-func (l *limiter) allow(key string) bool {
+func (l *limiter) allow(key string, limit int) bool {
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	limit := maxFailures
-	if len(key) > 3 && key[:3] == "ip:" {
-		limit = 4 * maxFailures
-	}
 	return len(l.recent(key, time.Now())) < limit
 }
 

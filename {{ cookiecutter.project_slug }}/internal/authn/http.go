@@ -4,9 +4,10 @@ import (
 	"encoding/json"
 	"errors"
 	"log/slog"
-	"net"
 	"net/http"
+	"net/netip"
 	"net/url"
+	"strings"
 	"time"
 
 	"{{ cookiecutter.go_module_path }}/internal/session"
@@ -24,6 +25,8 @@ type Handler struct {
 	Auth         *Service
 	SecureCookie bool
 	NATS         NATSConfig
+	// TrustedProxies are the reverse proxies whose X-Forwarded-For is read.
+	TrustedProxies []netip.Prefix
 }
 
 func (h *Handler) CookieName() string {
@@ -67,13 +70,38 @@ func (h *Handler) StartSession(w http.ResponseWriter, r *http.Request, token str
 	h.SetSession(w, token, c.Record.Deadline)
 }
 
-// Remote is the peer address. Forwarded headers are not trusted.
-func Remote(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
+// Remote is the client address used for login throttling. X-Forwarded-For
+// is read only when the peer is a configured trusted proxy, from the right,
+// skipping the trusted hops; a client can prepend any value to the header.
+func (h *Handler) Remote(r *http.Request) string {
+	addr, err := netip.ParseAddrPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr
 	}
-	return host
+	ip := addr.Addr().Unmap()
+	if !h.trusted(ip) {
+		return ip.String()
+	}
+	hops := strings.Split(strings.Join(r.Header.Values("X-Forwarded-For"), ","), ",")
+	for i := len(hops) - 1; i >= 0; i-- {
+		hop, err := netip.ParseAddr(strings.TrimSpace(hops[i]))
+		if err != nil {
+			break
+		}
+		if ip = hop.Unmap(); !h.trusted(ip) {
+			break
+		}
+	}
+	return ip.String()
+}
+
+func (h *Handler) trusted(ip netip.Addr) bool {
+	for _, p := range h.TrustedProxies {
+		if p.Contains(ip) {
+			return true
+		}
+	}
+	return false
 }
 
 // Routes adds the authentication endpoints. Every state-changing route
@@ -165,7 +193,7 @@ func (h *Handler) setup(w http.ResponseWriter, r *http.Request) {
 		writeError(w, validationError{errors.New("invalid request")})
 		return
 	}
-	token, cur, err := h.Auth.Setup(r.Context(), c.Token, c.Username, c.Password, Remote(r))
+	token, cur, err := h.Auth.Setup(r.Context(), c.Token, c.Username, c.Password, h.Remote(r))
 	if err != nil {
 		if !errors.Is(err, users.ErrSetup) && !errors.Is(err, ErrThrottled) && !errors.Is(err, ErrUnavailable) {
 			err = validationError{err}
@@ -183,7 +211,7 @@ func (h *Handler) login(w http.ResponseWriter, r *http.Request) {
 		writeError(w, validationError{errors.New("invalid request")})
 		return
 	}
-	token, cur, err := h.Auth.Login(r.Context(), c.Username, c.Password, Remote(r))
+	token, cur, err := h.Auth.Login(r.Context(), c.Username, c.Password, h.Remote(r))
 	if err != nil {
 		writeError(w, err)
 		return
@@ -238,7 +266,7 @@ func (h *Handler) connectToken(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) oidcStart(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	u, state, err := h.Auth.OIDCStart(r.Context(), r.URL.Query().Get("redirect"))
+	u, state, err := h.Auth.OIDCStart(r.Context(), r.URL.Query().Get("redirect"), h.Remote(r))
 	if err != nil {
 		status, _ := ErrorStatus(err)
 		if status == http.StatusNotFound {

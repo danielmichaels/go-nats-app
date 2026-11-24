@@ -60,7 +60,7 @@ type attempt struct{ state, nonce, challenge, redirect string }
 
 func startLogin(t *testing.T, a *app.App) attempt {
 	t.Helper()
-	raw, state, err := a.Auth.OIDCStart(context.Background(), "/notes")
+	raw, state, err := a.Auth.OIDCStart(context.Background(), "/notes", "127.0.0.1")
 	if err != nil {
 		t.Fatal(err)
 	}
