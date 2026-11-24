@@ -1,0 +1,97 @@
+#!/usr/bin/env bash
+# Prepares an Amp orb to develop this Cookiecutter template: Go, templ, task,
+# cookiecutter, and the Go modules that generated projects use.
+set -euo pipefail
+
+GO_VERSION=1.27.4
+TEMPL_VERSION=v0.3.1118
+TASK_VERSION=v3.54.0
+COOKIECUTTER_VERSION=2.7.1
+
+repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+template="$repo_root/{{ cookiecutter.project_slug }}"
+
+step() {
+	local name=$1
+	shift
+	local start=$SECONDS
+	echo "==> $name"
+	"$@"
+	echo "    $name took $((SECONDS - start))s"
+}
+
+install_go() {
+	if [[ "$(/usr/local/go/bin/go env GOVERSION 2>/dev/null)" == "go$GO_VERSION" ]]; then
+		return
+	fi
+	local tmp
+	tmp="$(mktemp -d)"
+	curl -fsSL -o "$tmp/go.tgz" "https://go.dev/dl/go$GO_VERSION.linux-amd64.tar.gz"
+	sudo rm -rf /usr/local/go
+	sudo tar -C /usr/local -xzf "$tmp/go.tgz"
+	rm -rf "$tmp"
+}
+
+link_go() {
+	sudo ln -sf /usr/local/go/bin/go /usr/local/bin/go
+	sudo ln -sf /usr/local/go/bin/gofmt /usr/local/bin/gofmt
+}
+
+go_tool() {
+	local bin=$1 pkg=$2 version=$3
+	if [[ -x "/usr/local/bin/$bin" ]] && /usr/local/bin/go version -m "/usr/local/bin/$bin" 2>/dev/null | grep -q "mod.*$version"; then
+		return
+	fi
+	local tmp
+	tmp="$(mktemp -d)"
+	GOBIN="$tmp" go install "$pkg@$version"
+	sudo install -m 0755 "$tmp/$bin" "/usr/local/bin/$bin"
+	rm -rf "$tmp"
+}
+
+install_task() {
+	if [[ -x /usr/local/bin/task ]] && /usr/local/bin/task --version 2>/dev/null | grep -q "${TASK_VERSION#v}"; then
+		return
+	fi
+	local tmp
+	tmp="$(mktemp -d)"
+	curl -fsSL -o "$tmp/task.tgz" "https://github.com/go-task/task/releases/download/$TASK_VERSION/task_linux_amd64.tar.gz"
+	tar -C "$tmp" -xzf "$tmp/task.tgz" task
+	sudo install -m 0755 "$tmp/task" /usr/local/bin/task
+	rm -rf "$tmp"
+}
+
+install_cookiecutter() {
+	if command -v cookiecutter >/dev/null && cookiecutter --version | grep -q "Cookiecutter $COOKIECUTTER_VERSION "; then
+		return
+	fi
+	uv tool install --force "cookiecutter==$COOKIECUTTER_VERSION"
+}
+
+# The template go.mod has an unrendered module path, so download its
+# dependencies through a copy with a placeholder path.
+download_go_modules() {
+	local tmp
+	tmp="$(mktemp -d)"
+	sed 's#^module .*#module example.com/orbsetup#' "$template/go.mod" >"$tmp/go.mod"
+	cp "$template/go.sum" "$tmp/go.sum"
+	(cd "$tmp" && go mod download)
+	rm -rf "$tmp"
+}
+
+install_web_deps() {
+	local web="$template/web"
+	if [[ -f "$web/pnpm-lock.yaml" ]]; then
+		(cd "$web" && pnpm install --frozen-lockfile)
+	else
+		echo "    no React lockfile yet; skipped"
+	fi
+}
+
+step "Go $GO_VERSION" install_go
+step "Go on PATH" link_go
+step "templ $TEMPL_VERSION" go_tool templ github.com/a-h/templ/cmd/templ "$TEMPL_VERSION"
+step "task $TASK_VERSION" install_task
+step "cookiecutter $COOKIECUTTER_VERSION" install_cookiecutter
+step "Go modules" download_go_modules
+step "React dependencies" install_web_deps

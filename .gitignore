@@ -99,3 +99,6 @@ fabric.properties
 
 dist/
 /tmp/
+
+# Amp orb portals
+.amp/portals/*
