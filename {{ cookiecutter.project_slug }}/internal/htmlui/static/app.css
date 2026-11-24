@@ -25,3 +25,4 @@ button.link { background: none; color: var(--accent); padding: 0; }
 table { width: 100%; border-collapse: collapse; font-size: .9rem; } td, th { text-align: left; padding: .4rem; border-bottom: 1px solid var(--line); vertical-align: top; }
 .mono { font-family: ui-monospace, monospace; font-size: .8rem; word-break: break-all; }
 .card > .button { display: block; }
+.notes time { display: block; }

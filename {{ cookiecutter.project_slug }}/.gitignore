@@ -2,6 +2,6 @@ data/
 .env
 bin/
 node_modules/
-web/dist/
-*_templ.go.tmp
+internal/spa/dist/*
+!internal/spa/dist/.gitkeep
 nats-setup/

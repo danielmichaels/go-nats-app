@@ -6,7 +6,6 @@
 tmp/
 .env
 bin/
-*.json
 .idea/httpRequests/*
 node_modules
 
@@ -102,3 +101,6 @@ dist/
 
 # Amp orb portals
 .amp/portals/*
+
+# The React build output folder must exist in the template for go:embed.
+!/{{ cookiecutter.project_slug }}/internal/spa/dist/

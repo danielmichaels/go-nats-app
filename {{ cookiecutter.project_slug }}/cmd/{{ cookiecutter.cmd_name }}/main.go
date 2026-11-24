@@ -19,10 +19,11 @@ import (
 	"{{ cookiecutter.go_module_path }}/internal/config"
 {%- if cookiecutter.frontend == "datastar" %}
 	ui "{{ cookiecutter.go_module_path }}/internal/htmlui"
-{%- else %}
-	ui "{{ cookiecutter.go_module_path }}/internal/spa"
 {%- endif %}
 	"{{ cookiecutter.go_module_path }}/internal/natsauth"
+{%- if cookiecutter.frontend == "react" %}
+	ui "{{ cookiecutter.go_module_path }}/internal/spa"
+{%- endif %}
 )
 
 func main() {
