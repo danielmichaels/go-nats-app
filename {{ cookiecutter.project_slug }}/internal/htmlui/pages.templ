@@ -1,0 +1,212 @@
+package htmlui
+
+import "time"
+
+type NoteView struct {
+	ID      string
+	Title   string
+	Body    string
+	Created time.Time
+}
+
+type UserView struct {
+	ID         string
+	Username   string
+	Role       string
+	Disabled   bool
+	Identities []string
+}
+
+type Viewer struct {
+	Username string
+	Role     string
+	Method   string
+}
+
+type LoginView struct {
+	OIDC  bool
+	Setup bool
+	Error string
+}
+
+templ layout(title string, v *Viewer) {
+	<!DOCTYPE html>
+	<html lang="en">
+		<head>
+			<meta charset="utf-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1"/>
+			<title>{ title }</title>
+			<link rel="stylesheet" href="/static/app.css"/>
+			<script type="module" src="/static/datastar.js"></script>
+		</head>
+		<body>
+			<header>
+				<a class="brand" href="/">Notes</a>
+				if v != nil {
+					<nav>
+						if v.Role == "admin" {
+							<a href="/admin">Users</a>
+						}
+						<span class="who" data-testid="whoami">{ v.Username } · { v.Method }</span>
+						<form method="post" action="/logout"><button class="link" type="submit">Sign out</button></form>
+					</nav>
+				}
+			</header>
+			<main>
+				{ children... }
+			</main>
+		</body>
+	</html>
+}
+
+templ LoginPage(l LoginView) {
+	@layout("Sign in", nil) {
+		<section class="card narrow">
+			<h1>Sign in</h1>
+			@loginError(l.Error)
+			<form data-on:submit="@post('/ui/login', {contentType: 'form'})" data-indicator="_busy">
+				<label>Username <input name="username" autocomplete="username" required/></label>
+				<label>Password <input name="password" type="password" autocomplete="current-password" required/></label>
+				<button type="submit" data-attr:disabled="$_busy">Sign in with password</button>
+			</form>
+			if l.OIDC {
+				<div class="or">or</div>
+				<a class="button secondary" href="/auth/oidc/start?redirect=/">Sign in with your identity provider</a>
+			}
+			if l.Setup {
+				<p class="muted">No users yet. <a href="/setup">Create the first admin</a>.</p>
+			}
+		</section>
+	}
+}
+
+templ loginError(msg string) {
+	<p id="login-error" class="error" role="alert">{ msg }</p>
+}
+
+templ SetupPage() {
+	@layout("Setup", nil) {
+		<section class="card narrow">
+			<h1>Create the first admin</h1>
+			<p class="muted">Enter the one-time setup token from the server log.</p>
+			@loginError("")
+			<form data-on:submit="@post('/ui/setup', {contentType: 'form'})">
+				<label>Setup token <input name="token" required autocomplete="off"/></label>
+				<label>Username <input name="username" autocomplete="username" required/></label>
+				<label>Password <input name="password" type="password" autocomplete="new-password" minlength="12" required/></label>
+				<button type="submit">Create admin</button>
+			</form>
+		</section>
+	}
+}
+
+templ NotesPage(v Viewer, notes []NoteView, requestID string) {
+	@layout("Notes", &v) {
+		<section class="card">
+			<h1>Your notes</h1>
+			@noteForm(requestID, "", "", "")
+		</section>
+		<section class="card" data-init="@get('/ui/notes/live', {openWhenHidden: true})">
+			@connState("connected")
+			@NoteList(notes)
+		</section>
+	}
+}
+
+templ connState(state string) {
+	<p id="conn-state" class={ "state", state } data-testid="conn-state">{ state }</p>
+}
+
+templ noteForm(requestID, title, body, msg string) {
+	<form id="note-form" data-on:submit="@post('/ui/notes', {contentType: 'form'})" data-indicator="_saving">
+		<input type="hidden" name="request_id" value={ requestID }/>
+		<label>Title <input name="title" value={ title } maxlength="200" required/></label>
+		<label>Body <textarea name="body" maxlength="4000">{ body }</textarea></label>
+		<button type="submit" data-attr:disabled="$_saving">Add note</button>
+		<p class="error" role="alert">{ msg }</p>
+	</form>
+}
+
+templ NoteList(notes []NoteView) {
+	<ul id="notes" class="notes" data-testid="notes">
+		for _, n := range notes {
+			<li>
+				<strong>{ n.Title }</strong>
+				if n.Body != "" {
+					<p>{ n.Body }</p>
+				}
+				<time>{ n.Created.Local().Format("2 Jan 15:04:05") }</time>
+			</li>
+		}
+		if len(notes) == 0 {
+			<li class="muted">No notes yet.</li>
+		}
+	</ul>
+}
+
+templ AdminPage(v Viewer, us []UserView) {
+	@layout("Users", &v) {
+		<section class="card">
+			<h1>Users</h1>
+			@UserTable(us, "")
+		</section>
+		<section class="card">
+			<h2>Add a user</h2>
+			<form data-on:submit="@post('/ui/admin/users', {contentType: 'form'})">
+				<label>Username <input name="username" required/></label>
+				<label>Password <input name="password" type="password" minlength="12" required/></label>
+				<label>
+					Role
+					<select name="role"><option value="member">member</option><option value="admin">admin</option></select>
+				</label>
+				<button type="submit">Add user</button>
+			</form>
+		</section>
+	}
+}
+
+templ UserTable(us []UserView, msg string) {
+	<div id="users">
+		<p class="error" role="alert">{ msg }</p>
+		<table>
+			<thead><tr><th>User</th><th>Role</th><th>Status</th><th>Linked identities</th><th></th></tr></thead>
+			<tbody>
+				for _, u := range us {
+					<tr>
+						<td>{ u.Username }</td>
+						<td>{ u.Role }</td>
+						<td>
+							if u.Disabled {
+								disabled
+							} else {
+								active
+							}
+						</td>
+						<td>
+							for _, i := range u.Identities {
+								<div class="mono">{ i }</div>
+							}
+							<form class="inline" data-on:submit={ "@post('/ui/admin/users/" + u.ID + "', {contentType: 'form'})" }>
+								<input type="hidden" name="op" value="link"/>
+								<input name="issuer" placeholder="issuer" required/>
+								<input name="subject" placeholder="subject" required/>
+								<button type="submit">Link</button>
+							</form>
+						</td>
+						<td>
+							<form data-on:submit={ "@post('/ui/admin/users/" + u.ID + "', {contentType: 'form'})" }>
+								if u.Disabled {
+									<input type="hidden" name="op" value="enable"/>
+									<button type="submit">Enable</button>
+								} else {
+									<input type="hidden" name="op" value="disable"/>
+									<button type="submit">Disable</button>
+								}
+							</form>
+						</td>
+					</tr>
+				}
+			</tbody>
+		</table>
+	</div>
+}

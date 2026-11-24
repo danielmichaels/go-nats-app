@@ -1,67 +1,47 @@
-import os
 import shutil
 import textwrap
 from pathlib import Path
 
-CWD = Path.cwd().absolute()
-print(CWD)  # prints /absolute/path/to/{{cookiecutter.project_slug}}
+ROOT = Path.cwd()
+FRONTEND = "{{ cookiecutter.frontend }}"
 
-def remove(filepath):
-    if os.path.isfile(filepath):
-        os.remove(filepath)
-    elif os.path.isdir(filepath):
-        shutil.rmtree(filepath)
+REMOVE = {
+    "datastar": ["web", "internal/spa"],
+    "react": ["internal/htmlui"],
+}
+
+
+def remove_unused_frontend():
+    for rel in REMOVE[FRONTEND]:
+        path = ROOT / rel
+        if path.is_dir():
+            shutil.rmtree(path)
+        elif path.exists():
+            path.unlink()
+
+
 def create_env():
-    """
-    Copy .env.sample to .env automatically after creating the project.
-    """
+    shutil.copyfile(ROOT / ".env.sample", ROOT / ".env")
 
-    sample_envfile: str = os.path.join(CWD, ".env.sample")
-    envfile: str = os.path.join(CWD, ".env")
 
-    shutil.copyfile(sample_envfile, envfile)
-
-def remove_mongo():
-    if "{{cookiecutter.mongo}}" == "n":
-        remove(Path(CWD)/"internal"/"db")
 def print_final_instructions():
-    """
-    Simply prints final instructions for users to follow once they generate a project
-    using this template!
-    """
-    message = """
-    ====================================================================================
-    Your project `{{ cookiecutter.project_name.strip() }}` is ready!
-    The following is a *brief* overview of steps to push code to remote and
-    how to get your go module working.
-    - Move to project directory, and initialize a git repository:
-        $ cd {{ cookiecutter.project_name.strip() }} && git init
-    - Run go mod tidy to pull in dependencies:
-        $ go mod tidy
-    - Check the code works (if you have `air` in your $PATH)
-        $ air
-        or:
-        $ task dev
-        or (no hot-reloading):
-        $ go run cmd/{{ cookiecutter.cmd_name.strip() }}/main.go
-    - Upload initial code to git:
-        $ git add -a
-        $ git commit -m "Initial commit!"
-        $ git remote add origin https://{{ cookiecutter.go_module_path.strip('/') }}.git
-        $ git push -u origin --all
-    """
+    steps = {
+        "datastar": "task generate && task dev",
+        "react": "task web:install && task dev",
+    }[FRONTEND]
+    print(textwrap.dedent(f"""
+    Your project `{{ cookiecutter.project_name.strip() }}` is ready ({FRONTEND} frontend).
 
-    print(textwrap.dedent(message))
+        cd {{ cookiecutter.project_slug }}
+        git init
+        go mod tidy
+        {steps}
 
-runners = [
-    create_env,
-    remove_mongo,
-    print_final_instructions,
-]
+    The first start prints a one-time setup token. Open /setup and create the
+    first admin with it.
+    """))
 
-for runner in runners:
-    try:
-        runner()
-    except ValueError as e:
-        print(e)
-        exit(-10)
+
+remove_unused_frontend()
+create_env()
+print_final_instructions()
