@@ -64,10 +64,40 @@ must sign in again.
   client that gets no reply does not know if the note was saved; it resends
   the same request ID. Events can be lost, so clients list again after a
   reconnect.
+- **Command-line client.** `internal/cliauth` signs the CLI in through the
+  browser and connects it to NATS as the user. See below.
 
 Add your own service next to `internal/notes`: register its endpoints on
 `app.api.<name>.>`, get the caller with `api.Identity.Caller`, and add the
 subjects to `callout.Permissions`.
+
+## Command-line sign-in
+
+The binary is also a command-line client:
+
+```sh
+{{ cookiecutter.cmd_name }} login --server https://app.example.com   # default: $PUBLIC_URL
+{{ cookiecutter.cmd_name }} whoami                                   # calls app.api.whoami over NATS
+{{ cookiecutter.cmd_name }} logout
+```
+
+`login` works like `gh auth login` or `tailscale login`. It listens on a random
+loopback port and opens the browser at `/auth/cli/start`. That page asks you to
+confirm, then signs you in with OIDC or a password. The server sends a one-time
+code back to the loopback port, and the client exchanges it and its PKCE
+verifier at `POST /auth/cli/token` for a session of its own (RFC 8252). The
+browser gets no session.
+
+The client keeps the session token in `session.json` under the user config
+directory (`~/.config/{{ cookiecutter.project_slug }}` on Linux), readable only
+by you. It is an ordinary session: it lasts `SESSION_TTL`, OIDC sessions are
+refreshed against the provider on the server, and logout, disabling the user
+or unlinking the identity end it. The client never holds a provider token.
+For each NATS connection it sends the token as `Authorization: Bearer` to
+`POST /auth/connect-token`, so services see the user in `Nats-Request-Info`,
+as they do for a browser. `whoami` connects to the first URL in
+`/auth/config` (the browser WebSocket URL) unless `--nats` or
+`NATS_CLIENT_URL` names another.
 
 ## Lifetimes and logout
 

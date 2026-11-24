@@ -43,7 +43,12 @@ func (h *Handler) stateCookie() string {
 	return "oidc_state"
 }
 
+// SessionToken reads the session cookie, or a bearer token, which the
+// command-line client sends.
 func (h *Handler) SessionToken(r *http.Request) string {
+	if tok, ok := strings.CutPrefix(r.Header.Get("Authorization"), "Bearer "); ok {
+		return tok
+	}
 	c, err := r.Cookie(h.CookieName())
 	if err != nil {
 		return ""
@@ -115,6 +120,9 @@ func (h *Handler) Routes(mux *http.ServeMux, csrf *http.CrossOriginProtection) {
 	mux.Handle("POST /auth/connect-token", csrf.Handler(http.HandlerFunc(h.connectToken)))
 	mux.HandleFunc("GET /auth/oidc/start", h.oidcStart)
 	mux.HandleFunc("GET /auth/oidc/callback", h.oidcCallback)
+	mux.HandleFunc("GET /auth/cli/start", h.cliPage)
+	mux.Handle("POST /auth/cli/start", csrf.Handler(http.HandlerFunc(h.cliApprove)))
+	mux.Handle("POST /auth/cli/token", csrf.Handler(http.HandlerFunc(h.cliToken)))
 }
 
 type SessionView struct {
@@ -309,6 +317,8 @@ func (h *Handler) oidcCallback(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/login?error="+url.QueryEscape(code), http.StatusSeeOther)
 		return
 	}
-	h.StartSession(w, r, token, cur)
+	if token != "" {
+		h.StartSession(w, r, token, cur)
+	}
 	http.Redirect(w, r, redirect, http.StatusSeeOther)
 }
