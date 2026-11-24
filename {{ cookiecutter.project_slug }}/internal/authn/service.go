@@ -50,6 +50,7 @@ type Service struct {
 	Sessions *session.Store
 	OIDC     *oidcauth.Provider
 	attempts jetstream.KeyValue
+	cliCodes jetstream.KeyValue
 	publish  Publisher
 	opts     Options
 	limit    *limiter
@@ -67,7 +68,11 @@ func New(ctx context.Context, js jetstream.JetStream, replicas int, u *users.Sto
 	if o.RefreshLockTTL == 0 {
 		o.RefreshLockTTL = 20 * time.Second
 	}
-	return &Service{Users: u, Sessions: s, OIDC: p, attempts: kv, publish: pub, opts: o, limit: newLimiter(), now: time.Now}, nil
+	svc := &Service{Users: u, Sessions: s, OIDC: p, attempts: kv, publish: pub, opts: o, limit: newLimiter(), now: time.Now}
+	if err := svc.openCLICodes(ctx, js, replicas); err != nil {
+		return nil, err
+	}
+	return svc, nil
 }
 
 // Current is a validated session.
@@ -84,9 +89,19 @@ func SessionEventSubject(userID, sessionID string) string {
 func AccountEventSubject(userID string) string { return "app.events." + userID + ".account" }
 
 func (s *Service) Login(ctx context.Context, username, password, remote string) (string, Current, error) {
+	u, err := s.checkPassword(ctx, username, password, remote)
+	if err != nil {
+		return "", Current{}, err
+	}
+	now := s.now()
+	return s.start(ctx, u, session.Record{UserID: u.ID, Method: session.MethodPassword, AuthTime: now, Deadline: now.Add(s.opts.SessionTTL)})
+}
+
+// checkPassword checks a login, throttled per user and per client address.
+func (s *Service) checkPassword(ctx context.Context, username, password, remote string) (users.User, error) {
 	key := "u:" + username
 	if !s.limit.allow(key, userLimit) || !s.limit.allow("ip:"+remote, ipLimit) {
-		return "", Current{}, ErrThrottled
+		return users.User{}, ErrThrottled
 	}
 	u, err := s.Users.CheckPassword(ctx, username, password)
 	if err != nil {
@@ -94,11 +109,10 @@ func (s *Service) Login(ctx context.Context, username, password, remote string) 
 			s.limit.fail(key)
 			s.limit.fail("ip:" + remote)
 		}
-		return "", Current{}, err
+		return users.User{}, err
 	}
 	s.limit.clear(key)
-	now := s.now()
-	return s.start(ctx, u, session.Record{UserID: u.ID, Method: session.MethodPassword, AuthTime: now, Deadline: now.Add(s.opts.SessionTTL)})
+	return u, nil
 }
 
 func (s *Service) Setup(ctx context.Context, token, username, password, remote string) (string, Current, error) {
@@ -300,6 +314,8 @@ type attempt struct {
 	Verifier string    `json:"verifier"`
 	Redirect string    `json:"redirect"`
 	Expires  time.Time `json:"expires"`
+	// CLI, when set, sends the result to a command-line client instead of the browser.
+	CLI *CLIRequest `json:"cli,omitempty"`
 }
 
 func randomHex(n int) string {
@@ -318,6 +334,10 @@ func attemptKey(state string) string {
 // OIDCStart stores a login attempt and returns the provider URL and the
 // state, which the caller binds to the browser in a cookie.
 func (s *Service) OIDCStart(ctx context.Context, redirect, remote string) (string, string, error) {
+	return s.oidcStart(ctx, attempt{Redirect: LocalRedirect(redirect)}, remote)
+}
+
+func (s *Service) oidcStart(ctx context.Context, a attempt, remote string) (string, string, error) {
 	if s.OIDC == nil {
 		return "", "", ErrOIDCDisabled
 	}
@@ -326,7 +346,7 @@ func (s *Service) OIDCStart(ctx context.Context, redirect, remote string) (strin
 	}
 	s.limit.fail("oidc:" + remote)
 	state := randomHex(32)
-	a := attempt{Nonce: randomHex(32), Verifier: oauth2.GenerateVerifier(), Redirect: LocalRedirect(redirect), Expires: s.now().Add(5 * time.Minute)}
+	a.Nonce, a.Verifier, a.Expires = randomHex(32), oauth2.GenerateVerifier(), s.now().Add(5*time.Minute)
 	b, _ := json.Marshal(a)
 	if _, err := s.attempts.Create(ctx, attemptKey(state), b); err != nil {
 		return "", "", errors.Join(ErrUnavailable, err)
@@ -353,6 +373,8 @@ func (s *Service) takeAttempt(ctx context.Context, state string) (attempt, error
 }
 
 // OIDCCallback finishes a login. browserState is the state cookie value.
+// For a CLI login it returns no token, and the redirect is the CLI's
+// loopback URL with a one-time code.
 func (s *Service) OIDCCallback(ctx context.Context, browserState, state, code string) (string, Current, string, error) {
 	if s.OIDC == nil {
 		return "", Current{}, "", ErrOIDCDisabled
@@ -375,10 +397,15 @@ func (s *Service) OIDCCallback(ctx context.Context, browserState, state, code st
 		return "", Current{}, "", ErrUnbound
 	}
 	now := s.now()
-	token, c, err := s.start(ctx, u, session.Record{
+	rec := session.Record{
 		UserID: u.ID, Method: session.MethodOIDC, AuthTime: now, Deadline: now.Add(s.opts.SessionTTL),
 		OIDC: &session.OIDC{Issuer: i.Issuer, Subject: i.Subject, IdentityExpiry: i.Expiry, RefreshToken: refresh},
-	})
+	}
+	if a.CLI != nil {
+		redirect, err := s.issueCLICode(ctx, *a.CLI, rec)
+		return "", Current{}, redirect, err
+	}
+	token, c, err := s.start(ctx, u, rec)
 	return token, c, a.Redirect, err
 }
 
