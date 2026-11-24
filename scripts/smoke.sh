@@ -23,7 +23,7 @@ datastar)
   ;;
 react)
   test ! -e internal/htmlui
-  (cd web && pnpm install --frozen-lockfile && pnpm typecheck && pnpm build)
+  (cd web && pnpm install --frozen-lockfile && pnpm typecheck && pnpm build && pnpm test)
   test -f internal/spa/dist/index.html
   ;;
 esac

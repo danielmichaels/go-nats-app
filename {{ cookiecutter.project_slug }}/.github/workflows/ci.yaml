@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: 24
-      - run: pnpm install --frozen-lockfile && pnpm typecheck && pnpm build
+      - run: pnpm install --frozen-lockfile && pnpm typecheck && pnpm build && pnpm test
         working-directory: web
 {%- endif %}
       - run: test -z "$(gofmt -l .)"

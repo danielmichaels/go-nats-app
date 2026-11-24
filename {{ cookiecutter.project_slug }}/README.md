@@ -32,7 +32,7 @@ Admins add other users on the Users page.
 {%- else %}
 | `task generate` | Generate Go code from `.templ` files. |
 {%- endif %}
-| `task check` | gofmt, vet and race tests{% if cookiecutter.frontend == "react" %}, plus the web type check{% endif %}. |
+| `task check` | gofmt, vet and race tests{% if cookiecutter.frontend == "react" %}, plus the web type check and connection tests{% endif %}. |
 | `task build` | Build `bin/{{ cookiecutter.cmd_name }}`. |
 | `task docker-build` | Build the container image. |
 | `task nats-setup` | Write the files for an external NATS server. |

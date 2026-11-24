@@ -50,7 +50,7 @@ scripts/smoke.sh react
 
 `smoke.sh` generates a project named "Acme Notes" with module
 `github.com/acme/acme-notes`, then runs gofmt, vet, the race tests and a
-build. For React it also installs, type-checks and builds the web app. CI runs
+build. For React it also installs, type-checks, builds and tests the web app. CI runs
 both and builds the container images.
 
 Files with Go composite literals or frontend code are copied without
