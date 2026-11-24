@@ -26,7 +26,7 @@ def create_env():
 
 def print_final_instructions():
     steps = {
-        "datastar": "task generate && task dev",
+        "datastar": "task dev",
         "react": "task web:install && task dev",
     }[FRONTEND]
     print(textwrap.dedent(f"""

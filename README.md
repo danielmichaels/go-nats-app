@@ -1,65 +1,78 @@
-# go-nats-apapapapp [cookiecutter](https://cookiecutter.readthedocs.io/en/stable/) for quickly scaffolding go applications
+# go-nats-app
 
-This is a **highly** opinionated way of creating a Go service app using [NATS]. After manually
-creating these time and time again this is how I've settled on bootstrapping
-new app's. 
+A [Cookiecutter](https://cookiecutter.readthedocs.io/) template for a
+NATS-first Go app with persistent login, an auth callout, per-user NATS
+permissions, KV storage and live updates. Pick one frontend:
 
-## Usage
+- `datastar`: Go, [templ](https://templ.guide) and
+  [Datastar](https://data-star.dev). The server renders HTML and SSE, and does
+  all application work on a NATS connection that belongs to the session.
+- `react`: React, TypeScript and TanStack Router, Query and Form. The browser
+  connects to NATS over WebSocket with `@nats-io/nats-core` and does all
+  application work there.
 
-To create a new go-nats-app using this repository you only need to run the following:
+Both frontends have password login, one-time first-admin setup and optional
+OIDC sign-in with server-side provider refresh. Login survives reloads and
+restarts. HTTP is used only for sign-in, NATS admission, static files and
+health checks; there is no REST application API. A notes example shows
+storage, per-user isolation and live updates.
 
-```shell
-cookiecutter https://github.com/danielmichaels/go-web-app
-# or gh:danielmichaels/go-web-app
-```
-And then answer the prompts. Here's an example run using the defaults:
+## Use
 
-```shell
-z ❯ cookiecutter https://github.com/danielmichaels/go-nats-app
-github_username [danielmichaels]: 
-project_name [go-nats-app]: 
-project_slug [go-nats-app]: 
-cmd_name [app]: 
-project_description [A service based application using NATS for messaging]: 
-go_module_path [github.com/danielmichaels/go-nats-app]: 
-Select go_version:
-1 - 1.20
-2 - 1.19
-3 - 1.18
-Choose from 1, 2, 3 [1]: 
+```sh
+uvx cookiecutter gh:danielmichaels/go-nats-app
 ```
 
-This will create a directory called `go-nats-app` in the current working directory. All upper case
-letters are converted to lowercase and hypens are used instead of spaces.
+| Prompt | Default |
+| --- | --- |
+| `project_name` | `go-nats-app` |
+| `project_slug` | from `project_name` |
+| `github_username` | `danielmichaels` |
+| `go_module_path` | `github.com/<github_username>/<project_slug>` |
+| `cmd_name` | `app` |
+| `project_description` | |
+| `docker_registry` | `ghcr.io/<github_username>` |
+| `frontend` | `datastar` or `react` |
 
-After `cookiecutter` has run the following output will be printed to the screen detailing
-what to do next.
+The generated project contains only the selected frontend. Its README covers
+local development, the NATS account layout, OIDC setup, external NATS,
+backups and cookies.
 
-```shell
-====================================================================================
-Your project `go-web-app` is ready!
-The following is a *brief* overview of steps to push code to remote and
-how to get your go module working.
-- Move to project directory, and initialize a git repository:
-    $ cd go-web-app && git init
-- Run go mod tidy to pull in dependencies:
-    $ go mod tidy
-- If you want to update upstream dependencies (optional; recommended)
-    $ go get -u
-- Create node resources (Tailwind and Alpine.js)
-    $ yarn
-    $ make assets
-- Check the code works (if you have `air` in your $PATH)
-    $ air
-    or:
-    $ go run cmd/app/main.go
-    or:
-    $ make run/app
-- Upload initial code to git:
-    $ git add -a
-    $ git commit -m "Initial commit!"
-    $ git remote add origin https://github.com/danielmichaels/go-web-app.git
-    $ git push -u origin --all
+Generated projects need Go 1.26 or later and [task](https://taskfile.dev).
+React projects also need Node 24 and pnpm.
+
+## Develop the template
+
+```sh
+scripts/smoke.sh datastar
+scripts/smoke.sh react
 ```
 
-[nats]: https://nats.io
+`smoke.sh` generates a project named "Acme Notes" with module
+`github.com/acme/acme-notes`, then runs gofmt, vet, the race tests and a
+build. For React it also installs, type-checks and builds the web app. CI runs
+both and builds the container images.
+
+Files with Go composite literals or frontend code are copied without
+rendering (`_copy_without_render` in `cookiecutter.json`), because Jinja reads
+`{{` as template syntax.
+
+## References
+
+This template replaces the earlier `go-nats-app` scaffold. It adapts the
+behaviour of two projects; it copies no code from the first.
+
+- **React:** the browser-over-auth-callout design of the Synadia control-plane
+  portal (`synadia/control-plane`, through `32e03d1e8`), from its documented
+  handoff. Adapted: session cookie in KV keyed by a hash, 60 s connect token
+  with a public deny-all sentinel, per-session inbox, an authenticator that
+  reads the latest token, Query invalidation after reconnect. Changed: one
+  account layout shared with Datastar, no tenancy or event-store sequencing,
+  renewal on tab wake and network return as well as on a timer.
+- **Datastar:** `danielmichaels/lookout-lab`, `lab/portal`, `lab/issuer`,
+  `lab/users` and `lab/identity` at `be82d75d`. Adapted: one NATS user
+  connection per web session, OIDC Authorization Code with PKCE and KV login
+  attempts, exact subject binding, provider refresh on restore. Changed:
+  password sessions are durable too (the issuer admits a session, not a
+  password), refresh is serialized across replicas with KV revisions, and
+  bindings are stored per user instead of in a config file.

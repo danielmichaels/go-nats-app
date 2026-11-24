@@ -323,7 +323,9 @@ func TestOIDCRefresh(t *testing.T) {
 		p, a, _ := shortIdentity(t)
 		b := replica(t, a, p)
 		s := oidcLogin(t, a, p)
-		p.Set(func(p *oidctest.Provider) { p.Delay = 500 * time.Millisecond })
+		// The refreshed identity stays fresh for the whole test, so a second
+		// grant can only come from callers that did not wait for the first.
+		p.Set(func(p *oidctest.Provider) { p.Delay, p.IDTTL = 500*time.Millisecond, time.Hour })
 		time.Sleep(1500 * time.Millisecond)
 		var wg sync.WaitGroup
 		errs := make(chan error, 20)

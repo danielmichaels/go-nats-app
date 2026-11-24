@@ -1,0 +1,31 @@
+name: template
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        frontend: [datastar, react]
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.27'
+      - uses: astral-sh/setup-uv@v6
+      - run: uv tool install cookiecutter==2.7.1
+      - uses: pnpm/action-setup@v4
+        if: matrix.frontend == 'react'
+        with:
+          version: 12
+      - uses: actions/setup-node@v5
+        if: matrix.frontend == 'react'
+        with:
+          node-version: 24
+      - run: scripts/smoke.sh ${{ matrix.frontend }} "$RUNNER_TEMP/out"
+      - run: docker build -f deploy/Dockerfile .
+        working-directory: ${{ runner.temp }}/out/acme-notes

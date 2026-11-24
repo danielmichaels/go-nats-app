@@ -1,0 +1,7 @@
+.env
+data/
+bin/
+nats-setup/
+web/node_modules/
+internal/spa/dist/assets/
+internal/spa/dist/index.html

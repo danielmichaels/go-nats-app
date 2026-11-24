@@ -1,0 +1,85 @@
+# https://taskfile.dev
+version: '3'
+
+dotenv: ['.env']
+
+vars:
+  IMAGE: {{ cookiecutter.docker_registry.strip() }}/{{ cookiecutter.project_slug }}
+
+tasks:
+  default:
+    cmds:
+      - task --list
+    silent: true
+{% if cookiecutter.frontend == "datastar" %}
+  generate:
+    desc: Generate Go code from templ files
+    cmds:
+      - go run github.com/a-h/templ/cmd/templ@v0.3.1118 generate
+
+  dev:
+    desc: Run the app with embedded NATS
+    deps: [generate]
+    cmds:
+      - go run ./cmd/{{ cookiecutter.cmd_name }}
+
+  build:
+    desc: Build the binary
+    deps: [generate]
+    cmds:
+      - CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/{{ cookiecutter.cmd_name }} ./cmd/{{ cookiecutter.cmd_name }}
+{% else %}
+  web:install:
+    desc: Install the web dependencies
+    dir: web
+    cmds:
+      - pnpm install --frozen-lockfile
+
+  web:build:
+    desc: Build the React app into internal/spa/dist
+    dir: web
+    cmds:
+      - pnpm build
+
+  web:dev:
+    desc: Run Vite on :5173; it proxies /auth to the Go server
+    dir: web
+    cmds:
+      - pnpm dev
+
+  dev:
+    desc: Build the web app, then run the Go server with embedded NATS
+    deps: [web:build]
+    cmds:
+      - go run ./cmd/{{ cookiecutter.cmd_name }}
+
+  build:
+    desc: Build the binary with the web app embedded
+    deps: [web:build]
+    cmds:
+      - CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/{{ cookiecutter.cmd_name }} ./cmd/{{ cookiecutter.cmd_name }}
+{% endif %}
+  test:
+    desc: Run Go tests with the race detector
+    cmds:
+      - go test -race ./...
+
+  check:
+    desc: Format check, vet and tests{% if cookiecutter.frontend == "react" %}, plus the web type check{% endif %}
+    cmds:
+      - test -z "$(gofmt -l .)"
+      - go vet ./...
+{%- if cookiecutter.frontend == "react" %}
+      - cd web && pnpm typecheck
+{%- endif %}
+      - go test -race ./...
+
+  nats-setup:
+    desc: Write keys, runtime file and server config for an external NATS server
+    cmds:
+      - go run ./cmd/{{ cookiecutter.cmd_name }} nats-setup -dir nats-setup {% raw %}{{.CLI_ARGS}}{% endraw %}
+
+  docker-build:
+    desc: Build the container image
+    cmds:
+      - docker build -f deploy/Dockerfile -t {% raw %}{{.IMAGE}}{% endraw %} .
